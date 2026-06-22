@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Expense Tracker</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; background: #f0f2f5; padding: 30px; }
+    h1 { text-align: center; color: #333; margin-bottom: 30px; }
+
+    .card {
+      background: white; border-radius: 12px;
+      padding: 24px; margin-bottom: 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      max-width: 700px; margin: 0 auto 24px;
+    }
+
+    h2 { color: #444; margin-bottom: 16px; }
+
+    input, select {
+      width: 100%; padding: 10px; margin-bottom: 12px;
+      border: 1px solid #ddd; border-radius: 8px;
+      font-size: 14px;
+    }
+
+    input.error { border-color: #ef4444; }
+
+    button {
+      background: #4f46e5; color: white;
+      border: none; padding: 10px 20px;
+      border-radius: 8px; cursor: pointer;
+      font-size: 14px; width: 100%;
+    }
+    button:hover { background: #4338ca; }
+    button:disabled { background: #a5b4fc; cursor: not-allowed; }
+
+    .filter-row { display: flex; gap: 10px; margin-bottom: 16px; }
+    .filter-row select { margin-bottom: 0; }
+
+    .currency-row {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 16px; background: #f8f8ff;
+      padding: 12px; border-radius: 8px;
+      border: 1px solid #e0e0ff;
+    }
+    .currency-row label { font-size: 14px; color: #444; white-space: nowrap; }
+    .currency-row select { margin-bottom: 0; width: auto; }
+    .rate-info { font-size: 12px; color: #888; margin-left: auto; }
+
+    .stats-row { display: flex; gap: 12px; margin-bottom: 16px; }
+    .stat-box {
+      flex: 1; background: #f8f8ff;
+      border-radius: 8px; padding: 12px;
+      text-align: center; border: 1px solid #e0e0ff;
+    }
+    .stat-box .label { font-size: 12px; color: #888; margin-bottom: 4px; }
+    .stat-box .value { font-size: 20px; font-weight: bold; color: #4f46e5; }
+
+    .chart-container { max-width: 300px; margin: 0 auto; padding: 10px 0; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th {
+      background: #f8f8f8; padding: 10px;
+      text-align: left; border-bottom: 2px solid #eee; color: #666;
+    }
+    td { padding: 10px; border-bottom: 1px solid #eee; }
+    tr:hover { background: #fafafa; }
+
+    .delete-btn {
+      background: #ef4444; color: white;
+      border: none; padding: 6px 12px;
+      border-radius: 6px; cursor: pointer;
+      font-size: 12px; width: auto;
+    }
+    .delete-btn:hover { background: #dc2626; }
+
+    .category-badge {
+      padding: 3px 10px; border-radius: 20px;
+      font-size: 12px; font-weight: 500;
+    }
+    .Food { background: #fef3c7; color: #92400e; }
+    .Travel { background: #dbeafe; color: #1e40af; }
+    .Shopping { background: #fce7f3; color: #9d174d; }
+    .Bills { background: #fee2e2; color: #991b1b; }
+    .Entertainment { background: #d1fae5; color: #065f46; }
+    .Other { background: #f3f4f6; color: #374151; }
+
+    .total {
+      text-align: right; font-size: 16px;
+      font-weight: bold; color: #4f46e5; margin-top: 12px;
+    }
+
+    .empty { text-align: center; color: #999; padding: 30px 0; font-size: 14px; }
+    .no-chart { text-align: center; color: #999; font-size: 14px; padding: 20px 0; }
+
+    .error-msg {
+      background: #fee2e2; color: #991b1b;
+      padding: 12px; border-radius: 8px;
+      font-size: 13px; margin-bottom: 12px;
+      display: none;
+    }
+
+    .success-msg {
+      background: #d1fae5; color: #065f46;
+      padding: 12px; border-radius: 8px;
+      font-size: 13px; margin-bottom: 12px;
+      display: none;
+    }
+
+    .spinner {
+      display: inline-block; width: 16px; height: 16px;
+      border: 2px solid #fff; border-top-color: transparent;
+      border-radius: 50%; animation: spin 0.7s linear infinite;
+      vertical-align: middle; margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .backend-error {
+      background: #fee2e2; color: #991b1b;
+      padding: 16px; border-radius: 8px;
+      text-align: center; font-size: 14px;
+    }
+
+    .field-error {
+      font-size: 12px; color: #ef4444;
+      margin-top: -8px; margin-bottom: 8px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>💰 My Expense Tracker</h1>
+
+  <!-- Add Expense Form -->
+  <div class="card">
+    <h2>Add New Expense</h2>
+    <div class="error-msg" id="form-error"></div>
+    <div class="success-msg" id="form-success">Expense added successfully! ✅</div>
+    <input type="number" id="amount" placeholder="Amount (₹)" min="0" />
+    <div class="field-error" id="amount-error">Please enter a valid amount!</div>
+    <select id="category">
+      <option value="">Select Category</option>
+      <option value="Food">Food</option>
+      <option value="Travel">Travel</option>
+      <option value="Shopping">Shopping</option>
+      <option value="Bills">Bills</option>
+      <option value="Entertainment">Entertainment</option>
+      <option value="Other">Other</option>
+    </select>
+    <div class="field-error" id="category-error">Please select a category!</div>
+    <input type="text" id="note" placeholder="Note (optional)" />
+    <input type="date" id="date" />
+    <div class="field-error" id="date-error">Please select a date!</div>
+    <button onclick="addExpense()" id="add-btn">Add Expense</button>
+  </div>
+
+  <!-- Stats -->
+  <div class="card">
+    <div class="stats-row">
+      <div class="stat-box">
+        <div class="label">Total Expenses</div>
+        <div class="value" id="stat-count">0</div>
+      </div>
+      <div class="stat-box">
+        <div class="label">Total Spent</div>
+        <div class="value" id="stat-total">₹0</div>
+      </div>
+      <div class="stat-box">
+        <div class="label">Highest</div>
+        <div class="value" id="stat-highest">₹0</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chart -->
+  <div class="card">
+    <h2>Spending by Category</h2>
+    <div class="chart-container">
+      <canvas id="pie-chart"></canvas>
+    </div>
+    <p class="no-chart" id="no-chart-msg" style="display:none">Add expenses to see chart!</p>
+  </div>
+
+  <!-- Expense List -->
+  <div class="card">
+    <h2>All Expenses</h2>
+    <div class="currency-row">
+      <label>💱 Show in:</label>
+      <select id="currency" onchange="convertCurrency()">
+        <option value="INR">INR (₹)</option>
+        <option value="USD">USD ($)</option>
+        <option value="EUR">EUR (€)</option>
+        <option value="GBP">GBP (£)</option>
+        <option value="JPY">JPY (¥)</option>
+      </select>
+      <span class="rate-info" id="rate-info">1 INR = 1 INR</span>
+    </div>
+    <div class="filter-row">
+      <select id="filter-category" onchange="renderTable(getFilteredExpenses())">
+        <option value="">All Categories</option>
+        <option value="Food">Food</option>
+        <option value="Travel">Travel</option>
+        <option value="Shopping">Shopping</option>
+        <option value="Bills">Bills</option>
+        <option value="Entertainment">Entertainment</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Category</th>
+          <th>Note</th>
+          <th>Amount</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="expense-list">
+        <tr><td colspan="5" class="empty">
+          <span class="spinner"></span> Loading expenses...
+        </td></tr>
+      </tbody>
+    </table>
+    <div class="total" id="total">Total: ₹0</div>
+  </div>
+
+  <!-- AI Insights -->
+  <div class="card">
+    <h2>AI Spending Insights ✨</h2>
+    <button onclick="getAIInsights()" id="ai-btn" style="margin-bottom: 12px;">
+      Get AI Analysis
+    </button>
+    <div id="ai-result" style="
+      font-size: 14px; line-height: 1.8;
+      color: #444; background: #f8f8ff;
+      padding: 16px; border-radius: 8px;
+      border: 1px solid #e0e0ff;
+      min-height: 60px; display: none;
+    "></div>
+  </div>
+
+  <script>
+    const API = "http://127.0.0.1:8000";
+    const GEMINI_KEY = "AIzaSyAce05Mj7FgL5o7REA5ziIotEb4ifTUb6c";
+
+    let allExpenses = [];
+    let exchangeRate = 1;
+    let currentCurrency = "INR";
+    let currentSymbol = "₹";
+    let pieChart = null;
+
+    const SYMBOLS = { INR: "₹", USD: "$", EUR: "€", GBP: "£", JPY: "¥" };
+    const COLORS = {
+      Food: "#f59e0b", Travel: "#3b82f6",
+      Shopping: "#ec4899", Bills: "#ef4444",
+      Entertainment: "#10b981", Other: "#6b7280"
+    };
+    const FIXED_RATES = {
+      INR: 1, USD: 0.012, EUR: 0.011, GBP: 0.0095, JPY: 1.78
+    };
+
+    async function convertCurrency() {
+      const selected = document.getElementById("currency").value;
+      currentCurrency = selected;
+      currentSymbol = SYMBOLS[selected];
+      if (selected === "INR") {
+        exchangeRate = 1;
+        document.getElementById("rate-info").innerText = "1 INR = 1 INR";
+        renderTable(getFilteredExpenses());
+        return;
+      }
+      try {
+        document.getElementById("rate-info").innerText = "Fetching live rate...";
+        const res = await fetch("https://open.er-api.com/v6/latest/INR");
+        const data = await res.json();
+        exchangeRate = data.rates[selected];
+        document.getElementById("rate-info").innerText =
+          `1 INR = ${exchangeRate.toFixed(4)} ${selected} (live)`;
+      } catch (error) {
+        exchangeRate = FIXED_RATES[selected];
+        document.getElementById("rate-info").innerText =
+          `1 INR = ${exchangeRate.toFixed(4)} ${selected} (offline)`;
+      }
+      renderTable(getFilteredExpenses());
+    }
+
+    async function loadExpenses() {
+      try {
+        const res = await fetch(`${API}/expenses`);
+        if (!res.ok) throw new Error("Server error");
+        allExpenses = await res.json();
+        updateStats(allExpenses);
+        renderChart(allExpenses);
+        renderTable(getFilteredExpenses());
+      } catch (error) {
+        document.getElementById("expense-list").innerHTML = `
+          <tr><td colspan="5">
+            <div class="backend-error">
+              ⚠️ Cannot connect to backend server!<br>
+              <small>Make sure your server is running at http://127.0.0.1:8000</small>
+            </div>
+          </td></tr>`;
+      }
+    }
+
+    function getFilteredExpenses() {
+      const filter = document.getElementById("filter-category").value;
+      return filter ? allExpenses.filter(e => e.category === filter) : allExpenses;
+    }
+
+    function updateStats(expenses) {
+      const count = expenses.length;
+      const total = expenses.reduce((sum, e) => sum + e.amount, 0);
+      const highest = expenses.length ? Math.max(...expenses.map(e => e.amount)) : 0;
+      document.getElementById("stat-count").innerText = count;
+      document.getElementById("stat-total").innerText = `₹${total.toFixed(2)}`;
+      document.getElementById("stat-highest").innerText = `₹${highest.toFixed(2)}`;
+    }
+
+    function renderChart(expenses) {
+      if (expenses.length === 0) {
+        document.getElementById("no-chart-msg").style.display = "block";
+        document.getElementById("pie-chart").style.display = "none";
+        return;
+      }
+      document.getElementById("no-chart-msg").style.display = "none";
+      document.getElementById("pie-chart").style.display = "block";
+      const categoryTotals = {};
+      expenses.forEach(e => {
+        categoryTotals[e.category] = (categoryTotals[e.category] || 0) + e.amount;
+      });
+      const labels = Object.keys(categoryTotals);
+      const data = Object.values(categoryTotals);
+      const colors = labels.map(l => COLORS[l] || "#6b7280");
+      if (pieChart) pieChart.destroy();
+      pieChart = new Chart(document.getElementById("pie-chart"), {
+        type: "pie",
+        data: {
+          labels,
+          datasets: [{ data, backgroundColor: colors, borderWidth: 2, borderColor: "#fff" }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { position: "bottom" },
+            tooltip: { callbacks: { label: ctx => ` ₹${ctx.parsed.toFixed(2)}` } }
+          }
+        }
+      });
+    }
+
+    function renderTable(expenses) {
+      const tbody = document.getElementById("expense-list");
+      if (expenses.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="empty">
+          No expenses found! Add your first expense above 👆
+        </td></tr>`;
+        document.getElementById("total").innerText = "Total: ₹0";
+        return;
+      }
+      let total = 0;
+      tbody.innerHTML = expenses.map(e => {
+        const converted = e.amount * exchangeRate;
+        total += converted;
+        return `
+          <tr>
+            <td>${e.date}</td>
+            <td><span class="category-badge ${e.category}">${e.category}</span></td>
+            <td>${e.note || "-"}</td>
+            <td>${currentSymbol}${converted.toFixed(2)}</td>
+            <td><button class="delete-btn" onclick="deleteExpense(${e.id})">Delete</button></td>
+          </tr>`;
+      }).join("");
+      document.getElementById("total").innerText =
+        `Total: ${currentSymbol}${total.toFixed(2)}`;
+    }
+
+    function validateForm() {
+      let valid = true;
+
+      const amount = document.getElementById("amount").value;
+      const amountError = document.getElementById("amount-error");
+      const amountInput = document.getElementById("amount");
+      if (!amount || parseFloat(amount) <= 0) {
+        amountError.style.display = "block";
+        amountInput.classList.add("error");
+        valid = false;
+      } else {
+        amountError.style.display = "none";
+        amountInput.classList.remove("error");
+      }
+
+      const category = document.getElementById("category").value;
+      const categoryError = document.getElementById("category-error");
+      const categoryInput = document.getElementById("category");
+      if (!category) {
+        categoryError.style.display = "block";
+        categoryInput.classList.add("error");
+        valid = false;
+      } else {
+        categoryError.style.display = "none";
+        categoryInput.classList.remove("error");
+      }
+
+      const date = document.getElementById("date").value;
+      const dateError = document.getElementById("date-error");
+      const dateInput = document.getElementById("date");
+      if (!date) {
+        dateError.style.display = "block";
+        dateInput.classList.add("error");
+        valid = false;
+      } else {
+        dateError.style.display = "none";
+        dateInput.classList.remove("error");
+      }
+
+      return valid;
+    }
+
+    async function addExpense() {
+      if (!validateForm()) return;
+
+      const btn = document.getElementById("add-btn");
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Adding...';
+
+      const amount = document.getElementById("amount").value;
+      const category = document.getElementById("category").value;
+      const note = document.getElementById("note").value;
+      const date = document.getElementById("date").value;
+
+      try {
+        await fetch(`${API}/expenses`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ amount: parseFloat(amount), category, note, date })
+        });
+
+        document.getElementById("amount").value = "";
+        document.getElementById("category").value = "";
+        document.getElementById("note").value = "";
+        document.getElementById("date").value = "";
+
+        const success = document.getElementById("form-success");
+        success.style.display = "block";
+        setTimeout(() => success.style.display = "none", 3000);
+
+        loadExpenses();
+      } catch (error) {
+        const err = document.getElementById("form-error");
+        err.innerText = "Failed to add expense. Is your server running?";
+        err.style.display = "block";
+        setTimeout(() => err.style.display = "none", 4000);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = "Add Expense";
+      }
+    }
+
+    async function deleteExpense(id) {
+      const confirmed = confirm("Are you sure you want to delete this expense?");
+      if (!confirmed) return;
+      try {
+        await fetch(`${API}/expenses/${id}`, { method: "DELETE" });
+        loadExpenses();
+      } catch (error) {
+        alert("Failed to delete. Please try again!");
+      }
+    }
+
+    async function getAIInsights() {
+      if (allExpenses.length === 0) {
+        alert("Add some expenses first!");
+        return;
+      }
+      const btn = document.getElementById("ai-btn");
+      const resultDiv = document.getElementById("ai-result");
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Analysing...';
+      resultDiv.style.display = "block";
+      resultDiv.innerText = "Analysing your expenses...";
+
+      const categoryTotals = {};
+      allExpenses.forEach(e => {
+        categoryTotals[e.category] = (categoryTotals[e.category] || 0) + e.amount;
+      });
+      const summary = Object.entries(categoryTotals)
+        .map(([cat, amt]) => `${cat}: ₹${amt.toFixed(2)}`)
+        .join(", ");
+      const total = allExpenses.reduce((sum, e) => sum + e.amount, 0);
+      const prompt = `I have the following expenses: ${summary}. Total spent: ₹${total.toFixed(2)}. 
+      Give me 3 short friendly insights about my spending in simple English. 
+      Keep it under 100 words. Use bullet points.`;
+
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_KEY}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }]
+            })
+          }
+        );
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error?.message || "API error");
+        }
+        const data = await res.json();
+        const text = data.candidates[0].content.parts[0].text;
+        resultDiv.innerText = text;
+      } catch (error) {
+        resultDiv.innerText = `Could not get insights: ${error.message}. Please try again in a moment!`;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = "Get AI Analysis";
+      }
+    }
+
+    loadExpenses();
+  </script>
+
+</body>
+</html>
