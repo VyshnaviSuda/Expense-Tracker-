@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 import datetime
 import models, database
+import os
+import httpx
 
 models.Base.metadata.create_all(bind=database.engine)
 
@@ -53,4 +55,18 @@ def delete_expense(expense_id: int, db: Session = Depends(database.get_db)):
     db.delete(expense)
     db.commit()
     return {"message": "Expense deleted successfully"}
+@app.post("/ai-insights")
+async def ai_insights(data: dict):
+    gemini_key = os.environ.get("GEMINI_KEY")
+    prompt = data.get("prompt")
+
+    async with httpx.AsyncClient() as client:
+        res = await client.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={gemini_key}",
+            json={"contents": [{"parts": [{"text": prompt}]}]}
+        )
+        result = res.json()
+        text = result["candidates"][0]["content"]["parts"][0]["text"]
+        return {"insight": text}
+
 app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
